@@ -15,7 +15,7 @@ using namespace std;
 
 
 web::http::status_code _breakingStatus = status_codes::OK;
-utility::size64_t temp = 0;
+//utility::size64_t temp = 0;
 constexpr auto CHUNK = 10485760; //10 MB;
 
 
