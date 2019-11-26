@@ -15,6 +15,10 @@ using namespace std;
 
 
 web::http::status_code _breakingStatus = status_codes::OK;
+utility::size64_t temp = 0;
+constexpr auto CHUNK = 10485760; //10 MB;
+
+
 
 
 
@@ -27,7 +31,8 @@ pplx::task<http_response> make_task_request(http_client& client, method mtd, jso
 
 void MakeRequest(http_client& client, method mtd, json::value const& jvalue)
 {
-	make_task_request(client, mtd, jvalue)
+	//make_task_request(client, mtd, jvalue)
+	client.request(mtd, L"/restdemo", jvalue)
 		.then([](http_response response)
 			{
 				if (response.status_code() != status_codes::OK)
@@ -70,22 +75,54 @@ pplx::task<void> UploadFileToHttpServerAsync(http_client& client, const wchar_t*
 		{
 			try
 			{
-				auto fileStream = previousTask.get();
+				Concurrency::streams::istream fileStream = previousTask.get();
+	
 
+				//utility::size64_t upsize = 4711u, downsize = 4711u;
+				//int calls = 0;
+				http_client_config config;
+				config.set_chunksize(CHUNK);
+
+				utility::string_t address = U("http://127.0.0.1:34568");
+				http_client client(address, config);
+		
 				// Make HTTP request with the file stream as the body.
 				http_request request(methods::PUT);
 				request.headers().add(L"Filename", fileName);
 				request.set_request_uri(L"myfiletoputonserver");
 				request.set_body(fileStream);
-				return client.request(request).then([fileStream](pplx::task<http_response> previousTask)
-				//return client.request(methods::PUT, L"myfiletoputonserver", fileStream).then([fileStream](pplx::task<http_response> previousTask)
-					{
-						fileStream.close();
+				//temp = fileStream.streambuf().size();
+				//utility::size64_t c = fileStream.streambuf().size();
+				
+				request.set_progress_handler([fileStream](message_direction::direction direction, utility::size64_t so_far) {
+					utility::size64_t buf = fileStream.streambuf().size();
 
+					if (direction == message_direction::upload)
+					{
+	
+						//std::cout << "Call #" << calls << " : ";
+						//cout.precision(4);
+						cout.right;
+						cout.width(4);
+						cout << floor((double)so_far * 100 / buf) << " % \r";
+
+						//upsize = so_far;
+					}
+						
+					else
+					{
+						//downsize = so_far;
+					}
+					});
+
+				return client.request(request).then([fileStream](pplx::task<http_response> previousTask)
+					{		
+						fileStream.close();
+						
 						std::wostringstream ss;
 						try
 						{
-							auto response = previousTask.get();
+							web::http::http_response response = previousTask.get();
 							_breakingStatus = response.status_code();
 							if (_breakingStatus == status_codes::OK)
 							{
@@ -169,6 +206,8 @@ int main(int argc, char* argv[])
 		return 0;
 	}
 
+	
+
 	while (true)
 	{
 		std::cout << "Enter the file name: ";
@@ -196,14 +235,15 @@ int main(int argc, char* argv[])
 		//Uploading and checking----------------------------------------
 
 		std::wcout << L"Calling UploadFileToHttpServerAsync..." << std::endl;
-		UploadFileToHttpServerAsync(client, _userMessage);
+		UploadFileToHttpServerAsync(client, _userMessage).wait();
 
+/*
 		std::wcout << L"Calling CheckProgress..." << std::endl;
 		while (_breakingStatus != status_codes::Created)
 		{
 			CheckProgress(client).wait();
 		}
-
+*/
 		if (_breakingStatus == status_codes::Created) // Created means that the file was fully transmitted 
 		{
 			std::wcout << "File uploading has been completed successfully" << std::endl << std::endl << std::endl;
@@ -212,10 +252,13 @@ int main(int argc, char* argv[])
 		_breakingStatus = status_codes::OK; //reset breaking status
 		//----------------------------------------------------------------
 		
-
 	}
 
 
+
+
+
+	
 
 
 	return 0;
